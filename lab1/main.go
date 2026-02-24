@@ -27,8 +27,6 @@ func initGL() error {
 	gl.Viewport(0, 0, scene.Width, scene.Height)
 	gl.ClearColor(0.25, 0.25, 0.25, 1.0)
 	gl.Enable(gl.DEPTH_TEST)
-	gl.Enable(gl.CULL_FACE)
-	gl.CullFace(gl.BACK)
 
 	return nil
 }
@@ -55,6 +53,10 @@ func initGLFW() (window *glfw.Window, err error) {
 }
 
 func main() {
+	taskNum := 0
+	fmt.Println("Enter task number:")
+	fmt.Scan(&taskNum)
+
 	err := glfw.Init()
 	if err != nil {
 		panic(err)
@@ -67,11 +69,21 @@ func main() {
 	}
 	window.MakeContextCurrent()
 
-	sc, err := scene.NewScenePedestal(window)
+	newFunc := scene.NewSceneOneShape
+	if taskNum == 3 {
+		newFunc = scene.NewScenePedestal
+	}
+
+	sc, err := newFunc(window)
 	if err != nil {
 		panic(err)
 	}
 	defer sc.Release()
+
+	drawFunc := sc.DrawSceneOneShape
+	if taskNum == 3 {
+		drawFunc = sc.DrawScenePedestal
+	}
 
 	window.SetCursorPosCallback(func(w *glfw.Window, posX float64, posY float64) {
 		if sc.FirstMouse {
@@ -126,7 +138,7 @@ func main() {
 		gl.Clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
 
 		sc.UpdateViewProjPos()
-		sc.DrawScenePedestal()
+		drawFunc()
 
 		glfw.PollEvents()
 		window.SwapBuffers()

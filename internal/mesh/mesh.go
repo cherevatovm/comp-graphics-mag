@@ -16,7 +16,6 @@ import (
 type Vertex struct {
 	Position  mgl32.Vec3
 	Normal    mgl32.Vec3
-	Tangent   mgl32.Vec3
 	TexCoords mgl32.Vec2
 }
 
@@ -53,9 +52,7 @@ func NewMesh(vertices []Vertex, indices []uint32) (*Mesh, error) {
 	gl.EnableVertexAttribArray(1)
 	gl.VertexAttribPointer(1, 3, gl.FLOAT, false, int32(unsafe.Sizeof(Vertex{})), unsafe.Pointer(unsafe.Offsetof(Vertex{}.Normal)))
 	gl.EnableVertexAttribArray(2)
-	gl.VertexAttribPointer(2, 3, gl.FLOAT, false, int32(unsafe.Sizeof(Vertex{})), unsafe.Pointer(unsafe.Offsetof(Vertex{}.Tangent)))
-	gl.EnableVertexAttribArray(3)
-	gl.VertexAttribPointer(3, 2, gl.FLOAT, false, int32(unsafe.Sizeof(Vertex{})), unsafe.Pointer(unsafe.Offsetof(Vertex{}.TexCoords)))
+	gl.VertexAttribPointer(2, 2, gl.FLOAT, false, int32(unsafe.Sizeof(Vertex{})), unsafe.Pointer(unsafe.Offsetof(Vertex{}.TexCoords)))
 	gl.BindVertexArray(0)
 
 	return m, nil
@@ -150,10 +147,6 @@ func LoadMeshFromOBJ(path string) (*Mesh, error) {
 		return nil, err
 	}
 
-	if len(uvs) > 0 {
-		computeTangents(vertices, indices)
-	}
-
 	m, err := NewMesh(vertices, indices)
 	if err != nil {
 		return nil, err
@@ -194,31 +187,4 @@ func processFaceOBJ(vertToken string) (v, vt, vn int) {
 	}
 
 	return
-}
-
-func computeTangents(vertices []Vertex, indices []uint32) {
-	for i := 0; i < len(indices); i += 3 {
-		var ind0, ind1, ind2 = indices[i], indices[i+1], indices[i+2]
-		var v0, v1, v2 = &vertices[ind0], &vertices[ind1], &vertices[ind2]
-		var p0, p1, p2 = v0.Position, v1.Position, v2.Position
-		var uv0, uv1, uv2 = v0.TexCoords, v1.TexCoords, v2.TexCoords
-
-		edge0 := p1.Sub(p0)
-		edge1 := p2.Sub(p0)
-
-		deltaUV0 := uv1.Sub(uv0)
-		deltaUV1 := uv2.Sub(uv0)
-
-		f := 1.0 / (deltaUV0[0]*deltaUV1[1] - deltaUV1[0]*deltaUV0[1])
-
-		var tangent mgl32.Vec3
-		tangent[0] = f * (deltaUV1[1]*edge0[0] - deltaUV0[1]*edge1[0])
-		tangent[1] = f * (deltaUV1[1]*edge0[1] - deltaUV0[1]*edge1[1])
-		tangent[2] = f * (deltaUV1[1]*edge0[2] - deltaUV0[1]*edge1[2])
-		tangent = tangent.Normalize()
-
-		v0.Tangent = tangent
-		v1.Tangent = tangent
-		v2.Tangent = tangent
-	}
 }

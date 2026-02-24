@@ -1,9 +1,12 @@
 package scene
 
 import (
+	"math"
+
 	"github.com/cherevatovm/comp-graphics-mag/internal/camera"
 	"github.com/cherevatovm/comp-graphics-mag/internal/mesh"
 	"github.com/cherevatovm/comp-graphics-mag/internal/shader"
+	"github.com/go-gl/gl/all-core/gl"
 	"github.com/go-gl/glfw/v3.3/glfw"
 	"github.com/go-gl/mathgl/mgl32"
 )
@@ -14,14 +17,19 @@ const (
 )
 
 type Scene struct {
-	Window     *glfw.Window
-	Camera     *camera.Camera
-	Mesh       *mesh.Mesh
-	ShaderProg shader.ShaderProgram
+	ShaderProgs   []shader.ShaderProgram
+	curShaderProg *shader.ShaderProgram
+
+	Meshes  []*mesh.Mesh
+	curMesh *mesh.Mesh
+
+	Window *glfw.Window
+	Camera *camera.Camera
 
 	LastPosX, LastPosY float64
 	FirstMouse         bool
 
+	mode           int
 	baseTransforms []mgl32.Mat4
 	cubeAngles     []float32
 	pedestalAngle  float32
@@ -30,21 +38,79 @@ type Scene struct {
 	deltaTime, lastFrame float32
 }
 
-func NewScenePedestal(window *glfw.Window) (*Scene, error) {
-	sc := &Scene{Window: window, baseTransforms: make([]mgl32.Mat4, 4), cubeAngles: make([]float32, 4),
-		LastPosX: float64(Width) / 2, LastPosY: float64(Height) / 2, FirstMouse: true}
+func NewSceneOneShape(window *glfw.Window) (*Scene, error) {
+	sc := &Scene{Window: window, LastPosX: float64(Width) / 2, LastPosY: float64(Height) / 2, FirstMouse: true,
+		mode: 0, ShaderProgs: make([]shader.ShaderProgram, 2), Meshes: make([]*mesh.Mesh, 3)}
 
 	shaderProg, err := shader.NewShaderProgram("assets/shaders/simple.vert", "assets/shaders/simple.frag")
 	if err != nil {
 		return nil, err
 	}
-	sc.ShaderProg = shaderProg
+	sc.ShaderProgs[0] = shaderProg
+	sc.curShaderProg = &sc.ShaderProgs[0]
+	sc.ShaderProgs[0].Use()
+	sc.curShaderProg.SetUniformSqMatrFloat("transform.model", mgl32.Ident4())
+	gl.UseProgram(0)
+
+	shaderProg, err = shader.NewShaderProgram("assets/shaders/simple.vert", "assets/shaders/stripes.frag")
+	if err != nil {
+		return nil, err
+	}
+	sc.ShaderProgs[1] = shaderProg
+	sc.ShaderProgs[1].Use()
+	sc.curShaderProg.SetUniformSqMatrFloat("transform.model", mgl32.Ident4())
+	gl.UseProgram(0)
+
+	m := getPentagon()
+	sc.Meshes[0] = m
+	sc.curMesh = m
+
+	m, err = mesh.LoadMeshFromOBJ("assets/models/cube.obj")
+	if err != nil {
+		return nil, err
+	}
+	sc.Meshes[1] = m
+
+	m = getSquare()
+	sc.Meshes[2] = m
+
+	sc.Camera = camera.NewCamera(mgl32.Vec3{0, 0, 3},
+		-90, 0, 45, float32(Width)/Height, 3, 0.1)
+
+	return sc, nil
+}
+
+func (sc *Scene) DrawSceneOneShape() {
+	sc.curShaderProg.Use()
+	switch sc.mode {
+	case 0:
+		sc.curShaderProg.SetUniformFloat("const_color", 0.75, 0.0, 0.0)
+	case 1:
+		sc.curShaderProg.SetUniformFloat("const_color", 0.0, 0.75, 0.75)
+	case 2:
+		sc.curShaderProg.SetUniformFloat("const_color", 0.0, 0.75, 0.0)
+	}
+	sc.curMesh.Draw()
+}
+
+func NewScenePedestal(window *glfw.Window) (*Scene, error) {
+	sc := &Scene{Window: window, LastPosX: float64(Width) / 2, LastPosY: float64(Height) / 2, FirstMouse: true,
+		mode: -1, ShaderProgs: make([]shader.ShaderProgram, 1), Meshes: make([]*mesh.Mesh, 1),
+		baseTransforms: make([]mgl32.Mat4, 4), cubeAngles: make([]float32, 4)}
+
+	shaderProg, err := shader.NewShaderProgram("assets/shaders/simple.vert", "assets/shaders/simple.frag")
+	if err != nil {
+		return nil, err
+	}
+	sc.ShaderProgs[0] = shaderProg
+	sc.curShaderProg = &sc.ShaderProgs[0]
 
 	m, err := mesh.LoadMeshFromOBJ("assets/models/cube.obj")
 	if err != nil {
 		return nil, err
 	}
-	sc.Mesh = m
+	sc.Meshes[0] = m
+	sc.curMesh = m
 	sc.getBaseTransformsForPedestal()
 
 	sc.Camera = camera.NewCamera(mgl32.Vec3{0, 0, 3},
@@ -54,7 +120,7 @@ func NewScenePedestal(window *glfw.Window) (*Scene, error) {
 }
 
 func (sc *Scene) DrawScenePedestal() {
-	sc.ShaderProg.Use()
+	sc.curShaderProg.Use()
 	globalRotMatr := mgl32.HomogRotate3DY(sc.globalAngle)
 	localRotMatr := mgl32.HomogRotate3DY(sc.pedestalAngle)
 	pedestalCent := sc.calcPedestalCenter()
@@ -82,39 +148,56 @@ func (sc *Scene) ProcessInput() {
 	if sc.Window.GetKey(glfw.KeyD) == glfw.Press {
 		sc.Camera.ProcessKeyboard(camera.Right, sc.deltaTime)
 	}
-
-	if sc.Window.GetKey(glfw.Key1) == glfw.Press {
-		sc.cubeAngles[0] += sc.deltaTime * 2.0
-	}
-	if sc.Window.GetKey(glfw.Key2) == glfw.Press {
-		sc.cubeAngles[1] += sc.deltaTime * 2.0
-	}
-	if sc.Window.GetKey(glfw.Key3) == glfw.Press {
-		sc.cubeAngles[2] += sc.deltaTime * 2.0
-	}
-	if sc.Window.GetKey(glfw.Key4) == glfw.Press {
-		sc.cubeAngles[3] += sc.deltaTime * 2.0
-	}
-
-	if sc.Window.GetKey(glfw.KeyL) == glfw.Press {
-		sc.pedestalAngle += sc.deltaTime * 1.5
-	}
-	if sc.Window.GetKey(glfw.KeyG) == glfw.Press {
-		sc.globalAngle += sc.deltaTime * 1.0
-	}
-	if sc.Window.GetKey(glfw.KeyR) == glfw.Press {
-		for i := range sc.cubeAngles {
-			sc.cubeAngles[i] = 0
+	if sc.mode != -1 {
+		if sc.Window.GetKey(glfw.Key1) == glfw.Press {
+			sc.mode = 0
+			sc.curShaderProg = &sc.ShaderProgs[0]
+			sc.curMesh = sc.Meshes[0]
 		}
-		sc.pedestalAngle = 0
-		sc.globalAngle = 0
+		if sc.Window.GetKey(glfw.Key2) == glfw.Press {
+			sc.mode = 1
+			sc.curShaderProg = &sc.ShaderProgs[0]
+			sc.curMesh = sc.Meshes[1]
+		}
+		if sc.Window.GetKey(glfw.Key3) == glfw.Press {
+			sc.mode = 2
+			sc.curShaderProg = &sc.ShaderProgs[1]
+			sc.curMesh = sc.Meshes[2]
+		}
+	} else {
+		if sc.Window.GetKey(glfw.Key1) == glfw.Press {
+			sc.cubeAngles[0] += sc.deltaTime * 2.0
+		}
+		if sc.Window.GetKey(glfw.Key2) == glfw.Press {
+			sc.cubeAngles[1] += sc.deltaTime * 2.0
+		}
+		if sc.Window.GetKey(glfw.Key3) == glfw.Press {
+			sc.cubeAngles[2] += sc.deltaTime * 2.0
+		}
+		if sc.Window.GetKey(glfw.Key4) == glfw.Press {
+			sc.cubeAngles[3] += sc.deltaTime * 2.0
+		}
+
+		if sc.Window.GetKey(glfw.KeyL) == glfw.Press {
+			sc.pedestalAngle += sc.deltaTime * 1.5
+		}
+		if sc.Window.GetKey(glfw.KeyG) == glfw.Press {
+			sc.globalAngle += sc.deltaTime * 1.0
+		}
+		if sc.Window.GetKey(glfw.KeyR) == glfw.Press {
+			for i := range sc.cubeAngles {
+				sc.cubeAngles[i] = 0
+			}
+			sc.pedestalAngle = 0
+			sc.globalAngle = 0
+		}
 	}
 }
 
 func (sc *Scene) UpdateViewProjPos() {
-	sc.ShaderProg.SetUniformSqMatrFloat("transform.view", sc.Camera.GetViewMatrix())
-	sc.ShaderProg.SetUniformSqMatrFloat("transform.projection", sc.Camera.GetProjectionMatrix())
-	sc.ShaderProg.SetUniformFloat("view_pos", sc.Camera.Position[0],
+	sc.curShaderProg.SetUniformSqMatrFloat("transform.view", sc.Camera.GetViewMatrix())
+	sc.curShaderProg.SetUniformSqMatrFloat("transform.projection", sc.Camera.GetProjectionMatrix())
+	sc.curShaderProg.SetUniformFloat("view_pos", sc.Camera.Position[0],
 		sc.Camera.Position[1], sc.Camera.Position[2])
 }
 
@@ -124,10 +207,46 @@ func (sc *Scene) UpdateDeltaTime(currentFrame float32) {
 }
 
 func (sc *Scene) Release() {
-	if sc.Mesh != nil {
-		sc.Mesh.DeleteBuffers()
+	for _, m := range sc.Meshes {
+		m.DeleteBuffers()
 	}
-	sc.ShaderProg.Delete()
+	for _, sh := range sc.ShaderProgs {
+		sh.Delete()
+	}
+}
+
+func getPentagon() *mesh.Mesh {
+	vertices := make([]mesh.Vertex, 5)
+	indices := []uint32{
+		0, 1, 2,
+		0, 2, 3,
+		0, 3, 4,
+	}
+
+	alpha := -3 * math.Pi / 10
+	const delta = 2 * math.Pi / 5
+
+	for i := range 5 {
+		vertices[i].Position[0] = float32(math.Cos(alpha))
+		vertices[i].Position[1] = float32(math.Sin(alpha))
+		alpha += delta
+	}
+
+	m, _ := mesh.NewMesh(vertices, indices)
+	return m
+}
+
+func getSquare() *mesh.Mesh {
+	vertices := make([]mesh.Vertex, 4)
+	indices := []uint32{0, 1, 2, 0, 2, 3}
+
+	vertices[0].Position = [3]float32{-0.5, -0.5, 0}
+	vertices[1].Position = [3]float32{0.5, -0.5, 0}
+	vertices[2].Position = [3]float32{0.5, 0.5, 0}
+	vertices[3].Position = [3]float32{-0.5, 0.5, 0}
+
+	m, _ := mesh.NewMesh(vertices, indices)
+	return m
 }
 
 func (sc *Scene) getBaseTransformsForPedestal() {
@@ -152,10 +271,10 @@ func (sc *Scene) drawCube(index int, pedestalTransform mgl32.Mat4, color mgl32.V
 	rotationMatr := mgl32.HomogRotate3DY(sc.cubeAngles[index])
 	transform := pedestalTransform.Mul4(sc.baseTransforms[index].Mul4(rotationMatr))
 
-	sc.ShaderProg.SetUniformFloat("const_color", color[0], color[1], color[2])
-	sc.ShaderProg.SetUniformSqMatrFloat("transform.model", transform)
+	sc.curShaderProg.SetUniformFloat("const_color", color[0], color[1], color[2])
+	sc.curShaderProg.SetUniformSqMatrFloat("transform.model", transform)
 
-	sc.Mesh.Draw()
+	sc.curMesh.Draw()
 }
 
 func (sc *Scene) calcPedestalCenter() mgl32.Vec3 {
