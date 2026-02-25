@@ -39,8 +39,12 @@ type Scene struct {
 }
 
 func NewSceneOneShape(window *glfw.Window) (*Scene, error) {
-	sc := &Scene{Window: window, LastPosX: float64(Width) / 2, LastPosY: float64(Height) / 2, FirstMouse: true,
-		mode: 0, ShaderProgs: make([]shader.ShaderProgram, 2), Meshes: make([]*mesh.Mesh, 3)}
+	sc := &Scene{Window: window, LastPosX: float64(Width) / 2, LastPosY: float64(Height) / 2,
+		FirstMouse: true, mode: 0, ShaderProgs: make([]shader.ShaderProgram, 2),
+		Meshes: make([]*mesh.Mesh, 2), baseTransforms: make([]mgl32.Mat4, 2)}
+
+	sc.baseTransforms[0] = mgl32.Ident4()
+	sc.baseTransforms[1] = mgl32.Scale3D(0.5, 0.5, 0.5)
 
 	shaderProg, err := shader.NewShaderProgram("assets/shaders/simple.vert", "assets/shaders/simple.frag")
 	if err != nil {
@@ -48,8 +52,9 @@ func NewSceneOneShape(window *glfw.Window) (*Scene, error) {
 	}
 	sc.ShaderProgs[0] = shaderProg
 	sc.curShaderProg = &sc.ShaderProgs[0]
-	sc.ShaderProgs[0].Use()
-	sc.curShaderProg.SetUniformSqMatrFloat("transform.model", mgl32.Ident4())
+	sc.curShaderProg.Use()
+	sc.curShaderProg.SetUniformFloat("const_color", 0.75, 0.0, 0.0)
+	sc.curShaderProg.SetUniformSqMatrFloat("transform.model", sc.baseTransforms[0])
 	gl.UseProgram(0)
 
 	shaderProg, err = shader.NewShaderProgram("assets/shaders/simple.vert", "assets/shaders/stripes.frag")
@@ -58,7 +63,7 @@ func NewSceneOneShape(window *glfw.Window) (*Scene, error) {
 	}
 	sc.ShaderProgs[1] = shaderProg
 	sc.ShaderProgs[1].Use()
-	sc.curShaderProg.SetUniformSqMatrFloat("transform.model", mgl32.Ident4())
+	sc.ShaderProgs[1].SetUniformSqMatrFloat("transform.model", sc.baseTransforms[1])
 	gl.UseProgram(0)
 
 	m := getPentagon()
@@ -71,9 +76,6 @@ func NewSceneOneShape(window *glfw.Window) (*Scene, error) {
 	}
 	sc.Meshes[1] = m
 
-	m = getSquare()
-	sc.Meshes[2] = m
-
 	sc.Camera = camera.NewCamera(mgl32.Vec3{0, 0, 3},
 		-90, 0, 45, float32(Width)/Height, 3, 0.1)
 
@@ -82,14 +84,6 @@ func NewSceneOneShape(window *glfw.Window) (*Scene, error) {
 
 func (sc *Scene) DrawSceneOneShape() {
 	sc.curShaderProg.Use()
-	switch sc.mode {
-	case 0:
-		sc.curShaderProg.SetUniformFloat("const_color", 0.75, 0.0, 0.0)
-	case 1:
-		sc.curShaderProg.SetUniformFloat("const_color", 0.0, 0.75, 0.75)
-	case 2:
-		sc.curShaderProg.SetUniformFloat("const_color", 0.0, 0.75, 0.0)
-	}
 	sc.curMesh.Draw()
 }
 
@@ -135,6 +129,54 @@ func (sc *Scene) DrawScenePedestal() {
 	sc.drawCube(3, pedestalTransform, mgl32.Vec3{0.7, 0.7, 0.7})
 }
 
+func NewSceneThreeCubes(window *glfw.Window) (*Scene, error) {
+	sc := &Scene{Window: window, LastPosX: float64(Width) / 2, LastPosY: float64(Height) / 2,
+		FirstMouse: true, mode: 0, ShaderProgs: make([]shader.ShaderProgram, 3),
+		Meshes: make([]*mesh.Mesh, 1), baseTransforms: make([]mgl32.Mat4, 3)}
+
+	shaderProg, err := shader.NewShaderProgram("assets/shaders/simple.vert", "assets/shaders/checker.frag")
+	if err != nil {
+		return nil, err
+	}
+	sc.ShaderProgs[0] = shaderProg
+	sc.curShaderProg = &sc.ShaderProgs[0]
+
+	shaderProg, err = shader.NewShaderProgram("assets/shaders/simple.vert", "assets/shaders/horiz_stripes.frag")
+	if err != nil {
+		return nil, err
+	}
+	sc.ShaderProgs[1] = shaderProg
+
+	shaderProg, err = shader.NewShaderProgram("assets/shaders/simple.vert", "assets/shaders/diag_stripes.frag")
+	if err != nil {
+		return nil, err
+	}
+	sc.ShaderProgs[2] = shaderProg
+
+	m, err := mesh.LoadMeshFromOBJ("assets/models/cube.obj")
+	if err != nil {
+		return nil, err
+	}
+	sc.Meshes[0] = m
+	sc.curMesh = m
+	sc.getThreeCubesTransforms()
+
+	sc.Camera = camera.NewCamera(mgl32.Vec3{0, 0, 3},
+		-90, 0, 45, float32(Width)/Height, 3, 0.1)
+
+	return sc, nil
+}
+
+func (sc *Scene) DrawSceneThreeCubes() {
+	for i := range 3 {
+		sc.curShaderProg = &sc.ShaderProgs[i]
+		sc.curShaderProg.Use()
+		sc.curShaderProg.SetUniformSqMatrFloat("transform.model", sc.baseTransforms[i])
+		sc.UpdateViewProjPos()
+		sc.curMesh.Draw()
+	}
+}
+
 func (sc *Scene) ProcessInput() {
 	if sc.Window.GetKey(glfw.KeyW) == glfw.Press {
 		sc.Camera.ProcessKeyboard(camera.Forward, sc.deltaTime)
@@ -152,17 +194,25 @@ func (sc *Scene) ProcessInput() {
 		if sc.Window.GetKey(glfw.Key1) == glfw.Press {
 			sc.mode = 0
 			sc.curShaderProg = &sc.ShaderProgs[0]
+			sc.curShaderProg.Use()
+			sc.curShaderProg.SetUniformFloat("const_color", 0.75, 0.0, 0.0)
+			sc.curShaderProg.SetUniformSqMatrFloat("transform.model", sc.baseTransforms[0])
 			sc.curMesh = sc.Meshes[0]
 		}
 		if sc.Window.GetKey(glfw.Key2) == glfw.Press {
 			sc.mode = 1
 			sc.curShaderProg = &sc.ShaderProgs[0]
+			sc.curShaderProg.Use()
+			sc.curShaderProg.SetUniformFloat("const_color", 0.0, 0.75, 0.75)
+			sc.curShaderProg.SetUniformSqMatrFloat("transform.model", sc.baseTransforms[1])
 			sc.curMesh = sc.Meshes[1]
 		}
 		if sc.Window.GetKey(glfw.Key3) == glfw.Press {
 			sc.mode = 2
 			sc.curShaderProg = &sc.ShaderProgs[1]
-			sc.curMesh = sc.Meshes[2]
+			sc.curShaderProg.Use()
+			sc.curShaderProg.SetUniformSqMatrFloat("transform.model", sc.baseTransforms[1])
+			sc.curMesh = sc.Meshes[1]
 		}
 	} else {
 		if sc.Window.GetKey(glfw.Key1) == glfw.Press {
@@ -215,6 +265,8 @@ func (sc *Scene) Release() {
 	}
 }
 
+// --------------------------------- For lab 1 ---------------------------------
+
 func getPentagon() *mesh.Mesh {
 	vertices := make([]mesh.Vertex, 5)
 	indices := []uint32{
@@ -231,19 +283,6 @@ func getPentagon() *mesh.Mesh {
 		vertices[i].Position[1] = float32(math.Sin(alpha))
 		alpha += delta
 	}
-
-	m, _ := mesh.NewMesh(vertices, indices)
-	return m
-}
-
-func getSquare() *mesh.Mesh {
-	vertices := make([]mesh.Vertex, 4)
-	indices := []uint32{0, 1, 2, 0, 2, 3}
-
-	vertices[0].Position = [3]float32{-0.5, -0.5, 0}
-	vertices[1].Position = [3]float32{0.5, -0.5, 0}
-	vertices[2].Position = [3]float32{0.5, 0.5, 0}
-	vertices[3].Position = [3]float32{-0.5, 0.5, 0}
 
 	m, _ := mesh.NewMesh(vertices, indices)
 	return m
@@ -284,4 +323,21 @@ func (sc *Scene) calcPedestalCenter() mgl32.Vec3 {
 		center = center.Add(pos)
 	}
 	return center.Mul(1.0 / 4.0)
+}
+
+// --------------------------------- For lab 2 ---------------------------------
+
+func (sc *Scene) getThreeCubesTransforms() {
+	model := mgl32.Ident4()
+	sc.baseTransforms[0] = model
+
+	model2 := model.Mul4(mgl32.Translate3D(0.75, 0, 0))
+	sc.baseTransforms[1] = model2
+
+	model3 := model.Mul4(mgl32.Translate3D(-0.75, 0, 0))
+	sc.baseTransforms[2] = model3
+
+	for i := range 3 {
+		sc.baseTransforms[i] = sc.baseTransforms[i].Mul4(mgl32.Scale3D(0.25, 0.25, 0.25))
+	}
 }
