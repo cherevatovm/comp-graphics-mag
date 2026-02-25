@@ -16,6 +16,7 @@ import (
 type Vertex struct {
 	Position  mgl32.Vec3
 	Normal    mgl32.Vec3
+	Color     mgl32.Vec3
 	TexCoords mgl32.Vec2
 }
 
@@ -52,7 +53,9 @@ func NewMesh(vertices []Vertex, indices []uint32) (*Mesh, error) {
 	gl.EnableVertexAttribArray(1)
 	gl.VertexAttribPointer(1, 3, gl.FLOAT, false, int32(unsafe.Sizeof(Vertex{})), unsafe.Pointer(unsafe.Offsetof(Vertex{}.Normal)))
 	gl.EnableVertexAttribArray(2)
-	gl.VertexAttribPointer(2, 2, gl.FLOAT, false, int32(unsafe.Sizeof(Vertex{})), unsafe.Pointer(unsafe.Offsetof(Vertex{}.TexCoords)))
+	gl.VertexAttribPointer(2, 3, gl.FLOAT, false, int32(unsafe.Sizeof(Vertex{})), unsafe.Pointer(unsafe.Offsetof(Vertex{}.Color)))
+	gl.EnableVertexAttribArray(3)
+	gl.VertexAttribPointer(3, 2, gl.FLOAT, false, int32(unsafe.Sizeof(Vertex{})), unsafe.Pointer(unsafe.Offsetof(Vertex{}.TexCoords)))
 	gl.BindVertexArray(0)
 
 	return m, nil
@@ -154,6 +157,56 @@ func LoadMeshFromOBJ(path string) (*Mesh, error) {
 
 	return m, nil
 }
+
+// --------------------------------- For lab 2 ---------------------------------
+
+func GetCubeWithColoredFaces() *Mesh {
+	vertices := []Vertex{
+		{Position: mgl32.Vec3{-1.0, -1.0, 1.0}}, {Position: mgl32.Vec3{1.0, -1.0, 1.0}},
+		{Position: mgl32.Vec3{1.0, 1.0, 1.0}}, {Position: mgl32.Vec3{-1.0, 1.0, 1.0}},
+
+		{Position: mgl32.Vec3{-1.0, -1.0, -1.0}}, {Position: mgl32.Vec3{1.0, -1.0, -1.0}},
+		{Position: mgl32.Vec3{1.0, 1.0, -1.0}}, {Position: mgl32.Vec3{-1.0, 1.0, -1.0}},
+
+		{Position: mgl32.Vec3{-1.0, -1.0, -1.0}}, {Position: mgl32.Vec3{-1.0, -1.0, 1.0}},
+		{Position: mgl32.Vec3{-1.0, 1.0, 1.0}}, {Position: mgl32.Vec3{-1.0, 1.0, -1.0}},
+
+		{Position: mgl32.Vec3{1.0, -1.0, -1.0}}, {Position: mgl32.Vec3{1.0, -1.0, 1.0}},
+		{Position: mgl32.Vec3{1.0, 1.0, 1.0}}, {Position: mgl32.Vec3{1.0, 1.0, -1.0}},
+
+		{Position: mgl32.Vec3{-1.0, 1.0, 1.0}}, {Position: mgl32.Vec3{1.0, 1.0, 1.0}},
+		{Position: mgl32.Vec3{1.0, 1.0, -1.0}}, {Position: mgl32.Vec3{-1.0, 1.0, -1.0}},
+
+		{Position: mgl32.Vec3{-1.0, -1.0, 1.0}}, {Position: mgl32.Vec3{1.0, -1.0, 1.0}},
+		{Position: mgl32.Vec3{1.0, -1.0, -1.0}}, {Position: mgl32.Vec3{-1.0, -1.0, -1.0}},
+	}
+
+	indices := []uint32{
+		0, 1, 2, 0, 2, 3,
+		4, 5, 6, 4, 6, 7,
+		8, 9, 10, 8, 10, 11,
+		12, 13, 14, 12, 14, 15,
+		16, 17, 18, 16, 18, 19,
+		20, 21, 22, 20, 22, 23,
+	}
+
+	colors := [6]mgl32.Vec3{
+		{1.0, 0.0, 0.0}, {0.0, 1.0, 0.0},
+		{0.0, 0.0, 1.0}, {1.0, 1.0, 0.0},
+		{1.0, 0.0, 1.0}, {0.0, 1.0, 1.0},
+	}
+
+	for i := 0; i < len(vertices); i += 4 {
+		for j := range 4 {
+			vertices[i+j].Color = colors[i/4]
+		}
+	}
+
+	m, _ := NewMesh(vertices, indices)
+	return m
+}
+
+// -----------------------------------------------------------------------------
 
 func (m *Mesh) Draw() {
 	gl.BindVertexArray(m.VAO)

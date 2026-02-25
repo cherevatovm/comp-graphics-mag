@@ -131,8 +131,8 @@ func (sc *Scene) DrawScenePedestal() {
 
 func NewSceneThreeCubes(window *glfw.Window) (*Scene, error) {
 	sc := &Scene{Window: window, LastPosX: float64(Width) / 2, LastPosY: float64(Height) / 2,
-		FirstMouse: true, mode: 0, ShaderProgs: make([]shader.ShaderProgram, 3),
-		Meshes: make([]*mesh.Mesh, 1), baseTransforms: make([]mgl32.Mat4, 3)}
+		FirstMouse: true, mode: 0, ShaderProgs: make([]shader.ShaderProgram, 4),
+		Meshes: make([]*mesh.Mesh, 2), baseTransforms: make([]mgl32.Mat4, 4)}
 
 	shaderProg, err := shader.NewShaderProgram("assets/shaders/simple.vert", "assets/shaders/checker.frag")
 	if err != nil {
@@ -153,13 +153,22 @@ func NewSceneThreeCubes(window *glfw.Window) (*Scene, error) {
 	}
 	sc.ShaderProgs[2] = shaderProg
 
+	shaderProg, err = shader.NewShaderProgram("assets/shaders/simple_color.vert", "assets/shaders/simple_color.frag")
+	if err != nil {
+		return nil, err
+	}
+	sc.ShaderProgs[3] = shaderProg
+
 	m, err := mesh.LoadMeshFromOBJ("assets/models/cube.obj")
 	if err != nil {
 		return nil, err
 	}
 	sc.Meshes[0] = m
 	sc.curMesh = m
-	sc.getThreeCubesTransforms()
+
+	m = mesh.GetCubeWithColoredFaces()
+	sc.Meshes[1] = m
+	sc.getFourCubesTransforms()
 
 	sc.Camera = camera.NewCamera(mgl32.Vec3{0, 0, 3},
 		-90, 0, 45, float32(Width)/Height, 3, 0.1)
@@ -167,12 +176,13 @@ func NewSceneThreeCubes(window *glfw.Window) (*Scene, error) {
 	return sc, nil
 }
 
-func (sc *Scene) DrawSceneThreeCubes() {
-	for i := range 3 {
+func (sc *Scene) DrawSceneFourCubes() {
+	for i := range 4 {
 		sc.curShaderProg = &sc.ShaderProgs[i]
 		sc.curShaderProg.Use()
 		sc.curShaderProg.SetUniformSqMatrFloat("transform.model", sc.baseTransforms[i])
 		sc.UpdateViewProjPos()
+		sc.curMesh = sc.Meshes[i/3]
 		sc.curMesh.Draw()
 	}
 }
@@ -327,7 +337,7 @@ func (sc *Scene) calcPedestalCenter() mgl32.Vec3 {
 
 // --------------------------------- For lab 2 ---------------------------------
 
-func (sc *Scene) getThreeCubesTransforms() {
+func (sc *Scene) getFourCubesTransforms() {
 	model := mgl32.Ident4()
 	sc.baseTransforms[0] = model
 
@@ -337,7 +347,10 @@ func (sc *Scene) getThreeCubesTransforms() {
 	model3 := model.Mul4(mgl32.Translate3D(-0.75, 0, 0))
 	sc.baseTransforms[2] = model3
 
-	for i := range 3 {
+	model4 := model.Mul4(mgl32.Translate3D(-1.5, 0, 0))
+	sc.baseTransforms[3] = model4
+
+	for i := range len(sc.baseTransforms) {
 		sc.baseTransforms[i] = sc.baseTransforms[i].Mul4(mgl32.Scale3D(0.25, 0.25, 0.25))
 	}
 }

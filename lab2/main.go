@@ -139,7 +139,7 @@ func main() {
 
 		sc.UpdateViewProjPos()
 		//drawFunc()
-		sc.DrawSceneThreeCubes()
+		sc.DrawSceneFourCubes()
 
 		glfw.PollEvents()
 		window.SwapBuffers()
