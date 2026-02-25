@@ -29,11 +29,13 @@ type Scene struct {
 	LastPosX, LastPosY float64
 	FirstMouse         bool
 
-	mode           int
-	baseTransforms []mgl32.Mat4
-	cubeAngles     []float32
-	pedestalAngle  float32
-	globalAngle    float32
+	mode, activeMeshInd int
+	baseTransforms      []mgl32.Mat4
+	dynTransforms       []mgl32.Mat4
+
+	cubeAngles    []float32
+	pedestalAngle float32
+	globalAngle   float32
 
 	deltaTime, lastFrame float32
 }
@@ -129,10 +131,10 @@ func (sc *Scene) DrawScenePedestal() {
 	sc.drawCube(3, pedestalTransform, mgl32.Vec3{0.7, 0.7, 0.7})
 }
 
-func NewSceneThreeCubes(window *glfw.Window) (*Scene, error) {
-	sc := &Scene{Window: window, LastPosX: float64(Width) / 2, LastPosY: float64(Height) / 2,
-		FirstMouse: true, mode: 0, ShaderProgs: make([]shader.ShaderProgram, 4),
-		Meshes: make([]*mesh.Mesh, 2), baseTransforms: make([]mgl32.Mat4, 4)}
+func NewSceneFourCubes(window *glfw.Window) (*Scene, error) {
+	sc := &Scene{Window: window, LastPosX: float64(Width) / 2, LastPosY: float64(Height) / 2, FirstMouse: true,
+		mode: -2, ShaderProgs: make([]shader.ShaderProgram, 4), Meshes: make([]*mesh.Mesh, 2),
+		baseTransforms: make([]mgl32.Mat4, 4), dynTransforms: make([]mgl32.Mat4, 4)}
 
 	shaderProg, err := shader.NewShaderProgram("assets/shaders/simple.vert", "assets/shaders/checker.frag")
 	if err != nil {
@@ -177,10 +179,15 @@ func NewSceneThreeCubes(window *glfw.Window) (*Scene, error) {
 }
 
 func (sc *Scene) DrawSceneFourCubes() {
-	for i := range 4 {
+	for i := range len(sc.dynTransforms) {
 		sc.curShaderProg = &sc.ShaderProgs[i]
 		sc.curShaderProg.Use()
-		sc.curShaderProg.SetUniformSqMatrFloat("transform.model", sc.baseTransforms[i])
+		if i == sc.activeMeshInd {
+			sc.curShaderProg.SetUniformFloat("brightness", 1.2)
+		} else {
+			sc.curShaderProg.SetUniformFloat("brightness", 0.8)
+		}
+		sc.curShaderProg.SetUniformSqMatrFloat("transform.model", sc.dynTransforms[i])
 		sc.UpdateViewProjPos()
 		sc.curMesh = sc.Meshes[i/3]
 		sc.curMesh.Draw()
@@ -200,7 +207,8 @@ func (sc *Scene) ProcessInput() {
 	if sc.Window.GetKey(glfw.KeyD) == glfw.Press {
 		sc.Camera.ProcessKeyboard(camera.Right, sc.deltaTime)
 	}
-	if sc.mode != -1 {
+	// --------------------------------- For lab 1 ---------------------------------
+	if sc.mode > -1 {
 		if sc.Window.GetKey(glfw.Key1) == glfw.Press {
 			sc.mode = 0
 			sc.curShaderProg = &sc.ShaderProgs[0]
@@ -224,7 +232,7 @@ func (sc *Scene) ProcessInput() {
 			sc.curShaderProg.SetUniformSqMatrFloat("transform.model", sc.baseTransforms[1])
 			sc.curMesh = sc.Meshes[1]
 		}
-	} else {
+	} else if sc.mode == -1 {
 		if sc.Window.GetKey(glfw.Key1) == glfw.Press {
 			sc.cubeAngles[0] += sc.deltaTime * 2.0
 		}
@@ -250,6 +258,62 @@ func (sc *Scene) ProcessInput() {
 			}
 			sc.pedestalAngle = 0
 			sc.globalAngle = 0
+		}
+	} else {
+		// --------------------------------- For lab 2 ---------------------------------
+		if sc.Window.GetKey(glfw.Key1) == glfw.Press {
+			sc.activeMeshInd = 0
+		}
+		if sc.Window.GetKey(glfw.Key2) == glfw.Press {
+			sc.activeMeshInd = 1
+		}
+		if sc.Window.GetKey(glfw.Key3) == glfw.Press {
+			sc.activeMeshInd = 2
+		}
+		if sc.Window.GetKey(glfw.Key4) == glfw.Press {
+			sc.activeMeshInd = 3
+		}
+
+		if sc.Window.GetKey(glfw.KeyUp) == glfw.Press {
+			sc.processTranslation(0, 1, 0)
+		}
+		if sc.Window.GetKey(glfw.KeyDown) == glfw.Press {
+			sc.processTranslation(0, -1, 0)
+		}
+		if sc.Window.GetKey(glfw.KeyLeft) == glfw.Press {
+			sc.processTranslation(-1, 0, 0)
+		}
+		if sc.Window.GetKey(glfw.KeyRight) == glfw.Press {
+			sc.processTranslation(1, 0, 0)
+		}
+		if sc.Window.GetKey(glfw.KeyPageUp) == glfw.Press {
+			sc.processTranslation(0, 0, 1)
+		}
+		if sc.Window.GetKey(glfw.KeyPageDown) == glfw.Press {
+			sc.processTranslation(0, 0, -1)
+		}
+
+		if sc.Window.GetKey(glfw.KeyMinus) == glfw.Press {
+			sc.processScale(-1.1)
+		}
+		if sc.Window.GetKey(glfw.KeyEqual) == glfw.Press {
+			sc.processScale(1.1)
+		}
+
+		if sc.Window.GetKey(glfw.KeyX) == glfw.Press {
+			sc.processRotation(1, 0, 0)
+		}
+		if sc.Window.GetKey(glfw.KeyY) == glfw.Press {
+			sc.processRotation(0, 1, 0)
+		}
+		if sc.Window.GetKey(glfw.KeyZ) == glfw.Press {
+			sc.processRotation(0, 0, 1)
+		}
+
+		if sc.Window.GetKey(glfw.KeyR) == glfw.Press {
+			for i := range len(sc.baseTransforms) {
+				sc.dynTransforms[i] = sc.baseTransforms[i]
+			}
 		}
 	}
 }
@@ -338,19 +402,43 @@ func (sc *Scene) calcPedestalCenter() mgl32.Vec3 {
 // --------------------------------- For lab 2 ---------------------------------
 
 func (sc *Scene) getFourCubesTransforms() {
-	model := mgl32.Ident4()
+	model := mgl32.Translate3D(-1, 0, 0)
 	sc.baseTransforms[0] = model
 
-	model2 := model.Mul4(mgl32.Translate3D(0.75, 0, 0))
+	model2 := model.Mul4(mgl32.Translate3D(1, 0, 0))
 	sc.baseTransforms[1] = model2
 
-	model3 := model.Mul4(mgl32.Translate3D(-0.75, 0, 0))
+	model3 := model.Mul4(mgl32.Translate3D(2, 0, 0))
 	sc.baseTransforms[2] = model3
 
-	model4 := model.Mul4(mgl32.Translate3D(-1.5, 0, 0))
+	model4 := model.Mul4(mgl32.Translate3D(3, 0, 0))
 	sc.baseTransforms[3] = model4
 
 	for i := range len(sc.baseTransforms) {
 		sc.baseTransforms[i] = sc.baseTransforms[i].Mul4(mgl32.Scale3D(0.25, 0.25, 0.25))
+		sc.dynTransforms[i] = sc.baseTransforms[i]
 	}
+}
+
+func (sc *Scene) processTranslation(dx, dy, dz float32) {
+	translation := mgl32.Translate3D(dx*sc.deltaTime, dy*sc.deltaTime, dz*sc.deltaTime)
+	sc.dynTransforms[sc.activeMeshInd] = sc.dynTransforms[sc.activeMeshInd].Mul4(translation)
+}
+
+func (sc *Scene) processScale(factor float32) {
+	scale := mgl32.Scale3D(1.0+factor*sc.deltaTime, 1.0+factor*sc.deltaTime, 1.0+factor*sc.deltaTime)
+	sc.dynTransforms[sc.activeMeshInd] = sc.dynTransforms[sc.activeMeshInd].Mul4(scale)
+}
+
+func (sc *Scene) processRotation(dx, dy, dz float32) {
+	angle := sc.deltaTime
+	var rotation mgl32.Mat4
+	if dx != 0 {
+		rotation = mgl32.HomogRotate3DX(angle * dx)
+	} else if dy != 0 {
+		rotation = mgl32.HomogRotate3DY(angle * dy)
+	} else if dz != 0 {
+		rotation = mgl32.HomogRotate3DZ(angle * dz)
+	}
+	sc.dynTransforms[sc.activeMeshInd] = sc.dynTransforms[sc.activeMeshInd].Mul4(rotation)
 }

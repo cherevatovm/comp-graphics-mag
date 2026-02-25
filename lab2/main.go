@@ -74,7 +74,7 @@ func main() {
 	//newFunc = scene.NewScenePedestal
 	//}
 
-	sc, err := scene.NewSceneThreeCubes(window)
+	sc, err := scene.NewSceneFourCubes(window)
 	if err != nil {
 		panic(err)
 	}
@@ -138,7 +138,6 @@ func main() {
 		gl.Clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
 
 		sc.UpdateViewProjPos()
-		//drawFunc()
 		sc.DrawSceneFourCubes()
 
 		glfw.PollEvents()

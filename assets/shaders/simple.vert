@@ -11,7 +11,6 @@ uniform struct Transform {
 out vec3 position;
 
 void main() {
-	vec4 world_pos = transform.model * vec4(position_in, 1.0);
-	position = world_pos.xyz;
-    gl_Position = transform.projection * transform.view * world_pos;
+	position = position_in * 0.5;
+    gl_Position = transform.projection * transform.view * transform.model * vec4(position_in, 1.0);;
 }
