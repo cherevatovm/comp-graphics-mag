@@ -131,46 +131,41 @@ func (sc *Scene) DrawScenePedestal() {
 	sc.drawCube(3, pedestalTransform, mgl32.Vec3{0.7, 0.7, 0.7})
 }
 
-func NewSceneFourCubes(window *glfw.Window) (*Scene, error) {
+func NewSceneSevenShapes(window *glfw.Window) (*Scene, error) {
 	sc := &Scene{Window: window, LastPosX: float64(Width) / 2, LastPosY: float64(Height) / 2, FirstMouse: true,
-		mode: -2, ShaderProgs: make([]shader.ShaderProgram, 4), Meshes: make([]*mesh.Mesh, 2),
-		baseTransforms: make([]mgl32.Mat4, 4), dynTransforms: make([]mgl32.Mat4, 4)}
+		mode: -2, ShaderProgs: make([]shader.ShaderProgram, 6), Meshes: make([]*mesh.Mesh, 3),
+		baseTransforms: make([]mgl32.Mat4, 7), dynTransforms: make([]mgl32.Mat4, 7)}
 
-	shaderProg, err := shader.NewShaderProgram("assets/shaders/simple.vert", "assets/shaders/checker.frag")
+	paths := []string{"assets/shaders/simple_br.frag", "assets/shaders/stripes_br.frag", "assets/shaders/checker.frag",
+		"assets/shaders/horiz_stripes.frag", "assets/shaders/diag_stripes.frag",
+	}
+	for i := range 5 {
+		shaderProg, err := shader.NewShaderProgram("assets/shaders/simple.vert", paths[i])
+		if err != nil {
+			return nil, err
+		}
+		sc.ShaderProgs[i] = shaderProg
+	}
+
+	shaderProg, err := shader.NewShaderProgram("assets/shaders/simple_color.vert", "assets/shaders/simple_color.frag")
 	if err != nil {
 		return nil, err
 	}
-	sc.ShaderProgs[0] = shaderProg
+	sc.ShaderProgs[5] = shaderProg
 	sc.curShaderProg = &sc.ShaderProgs[0]
 
-	shaderProg, err = shader.NewShaderProgram("assets/shaders/simple.vert", "assets/shaders/horiz_stripes.frag")
-	if err != nil {
-		return nil, err
-	}
-	sc.ShaderProgs[1] = shaderProg
-
-	shaderProg, err = shader.NewShaderProgram("assets/shaders/simple.vert", "assets/shaders/diag_stripes.frag")
-	if err != nil {
-		return nil, err
-	}
-	sc.ShaderProgs[2] = shaderProg
-
-	shaderProg, err = shader.NewShaderProgram("assets/shaders/simple_color.vert", "assets/shaders/simple_color.frag")
-	if err != nil {
-		return nil, err
-	}
-	sc.ShaderProgs[3] = shaderProg
-
-	m, err := mesh.LoadMeshFromOBJ("assets/models/cube.obj")
-	if err != nil {
-		return nil, err
-	}
+	m := getPentagon()
 	sc.Meshes[0] = m
-	sc.curMesh = m
+
+	m, err = mesh.LoadMeshFromOBJ("assets/models/cube.obj")
+	if err != nil {
+		return nil, err
+	}
+	sc.Meshes[1] = m
 
 	m = mesh.GetCubeWithColoredFaces()
-	sc.Meshes[1] = m
-	sc.getFourCubesTransforms()
+	sc.Meshes[2] = m
+	sc.getSevenShapesTransforms()
 
 	sc.Camera = camera.NewCamera(mgl32.Vec3{0, 0, 3},
 		-90, 0, 45, float32(Width)/Height, 3, 0.1)
@@ -178,18 +173,34 @@ func NewSceneFourCubes(window *glfw.Window) (*Scene, error) {
 	return sc, nil
 }
 
-func (sc *Scene) DrawSceneFourCubes() {
-	for i := range len(sc.dynTransforms) {
-		sc.curShaderProg = &sc.ShaderProgs[i]
+func (sc *Scene) DrawSceneSevenShapes() {
+	for i := range sc.dynTransforms {
+		switch i {
+		case 0, 1:
+			sc.curShaderProg = &sc.ShaderProgs[0]
+			sc.curShaderProg.SetUniformFloat("const_color", 1.0, 0.0, 0.0)
+		default:
+			sc.curShaderProg = &sc.ShaderProgs[i-1]
+		}
 		sc.curShaderProg.Use()
+
 		if i == sc.activeMeshInd {
 			sc.curShaderProg.SetUniformFloat("brightness", 1.2)
 		} else {
 			sc.curShaderProg.SetUniformFloat("brightness", 0.8)
 		}
+
 		sc.curShaderProg.SetUniformSqMatrFloat("transform.model", sc.dynTransforms[i])
 		sc.UpdateViewProjPos()
-		sc.curMesh = sc.Meshes[i/3]
+
+		switch i {
+		case 0:
+			sc.curMesh = sc.Meshes[0]
+		case 6:
+			sc.curMesh = sc.Meshes[2]
+		default:
+			sc.curMesh = sc.Meshes[1]
+		}
 		sc.curMesh.Draw()
 	}
 }
@@ -273,6 +284,15 @@ func (sc *Scene) ProcessInput() {
 		if sc.Window.GetKey(glfw.Key4) == glfw.Press {
 			sc.activeMeshInd = 3
 		}
+		if sc.Window.GetKey(glfw.Key5) == glfw.Press {
+			sc.activeMeshInd = 4
+		}
+		if sc.Window.GetKey(glfw.Key6) == glfw.Press {
+			sc.activeMeshInd = 5
+		}
+		if sc.Window.GetKey(glfw.Key7) == glfw.Press {
+			sc.activeMeshInd = 6
+		}
 
 		if sc.Window.GetKey(glfw.KeyUp) == glfw.Press {
 			sc.processTranslation(0, 1, 0)
@@ -311,9 +331,7 @@ func (sc *Scene) ProcessInput() {
 		}
 
 		if sc.Window.GetKey(glfw.KeyR) == glfw.Press {
-			for i := range len(sc.baseTransforms) {
-				sc.dynTransforms[i] = sc.baseTransforms[i]
-			}
+			copy(sc.dynTransforms, sc.baseTransforms)
 		}
 	}
 }
@@ -365,17 +383,10 @@ func getPentagon() *mesh.Mesh {
 func (sc *Scene) getBaseTransformsForPedestal() {
 	model := mgl32.Translate3D(2, 0, 0)
 	sc.baseTransforms[0] = model
-
-	model1 := model.Mul4(mgl32.Translate3D(0, 0.5, 0))
-	sc.baseTransforms[1] = model1
-
-	model2 := model.Mul4(mgl32.Translate3D(0.5, 0, 0))
-	sc.baseTransforms[2] = model2
-
-	model3 := model.Mul4(mgl32.Translate3D(-0.5, 0, 0))
-	sc.baseTransforms[3] = model3
-
-	for i := range 4 {
+	sc.baseTransforms[1] = model.Mul4(mgl32.Translate3D(0, 0.5, 0))
+	sc.baseTransforms[2] = model.Mul4(mgl32.Translate3D(0.5, 0, 0))
+	sc.baseTransforms[3] = model.Mul4(mgl32.Translate3D(-0.5, 0, 0))
+	for i := range sc.baseTransforms {
 		sc.baseTransforms[i] = sc.baseTransforms[i].Mul4(mgl32.Scale3D(0.25, 0.25, 0.25))
 	}
 }
@@ -401,20 +412,16 @@ func (sc *Scene) calcPedestalCenter() mgl32.Vec3 {
 
 // --------------------------------- For lab 2 ---------------------------------
 
-func (sc *Scene) getFourCubesTransforms() {
+func (sc *Scene) getSevenShapesTransforms() {
 	model := mgl32.Translate3D(-1, 0, 0)
 	sc.baseTransforms[0] = model
-
-	model2 := model.Mul4(mgl32.Translate3D(1, 0, 0))
-	sc.baseTransforms[1] = model2
-
-	model3 := model.Mul4(mgl32.Translate3D(2, 0, 0))
-	sc.baseTransforms[2] = model3
-
-	model4 := model.Mul4(mgl32.Translate3D(3, 0, 0))
-	sc.baseTransforms[3] = model4
-
-	for i := range len(sc.baseTransforms) {
+	sc.baseTransforms[1] = model.Mul4(mgl32.Translate3D(1, 0, 0))
+	sc.baseTransforms[2] = model.Mul4(mgl32.Translate3D(2, 0, 0))
+	sc.baseTransforms[3] = model.Mul4(mgl32.Translate3D(3, 0, 0))
+	sc.baseTransforms[4] = model.Mul4(mgl32.Translate3D(0, -1, 0))
+	sc.baseTransforms[5] = model.Mul4(mgl32.Translate3D(1, -1, 0))
+	sc.baseTransforms[6] = model.Mul4(mgl32.Translate3D(2, -1, 0))
+	for i := range sc.baseTransforms {
 		sc.baseTransforms[i] = sc.baseTransforms[i].Mul4(mgl32.Scale3D(0.25, 0.25, 0.25))
 		sc.dynTransforms[i] = sc.baseTransforms[i]
 	}

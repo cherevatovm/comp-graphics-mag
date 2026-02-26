@@ -53,10 +53,6 @@ func initGLFW() (window *glfw.Window, err error) {
 }
 
 func main() {
-	//taskNum := 0
-	//fmt.Println("Enter task number:")
-	//fmt.Scan(&taskNum)
-
 	err := glfw.Init()
 	if err != nil {
 		panic(err)
@@ -69,21 +65,11 @@ func main() {
 	}
 	window.MakeContextCurrent()
 
-	//newFunc := scene.NewSceneOneShape
-	//if taskNum == 3 {
-	//newFunc = scene.NewScenePedestal
-	//}
-
-	sc, err := scene.NewSceneFourCubes(window)
+	sc, err := scene.NewSceneSevenShapes(window)
 	if err != nil {
 		panic(err)
 	}
 	defer sc.Release()
-
-	//drawFunc := sc.DrawSceneOneShape
-	//if taskNum == 3 {
-	//drawFunc = sc.DrawScenePedestal
-	//}
 
 	window.SetCursorPosCallback(func(w *glfw.Window, posX float64, posY float64) {
 		if sc.FirstMouse {
@@ -136,9 +122,7 @@ func main() {
 		sc.ProcessInput()
 
 		gl.Clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
-
-		sc.UpdateViewProjPos()
-		sc.DrawSceneFourCubes()
+		sc.DrawSceneSevenShapes()
 
 		glfw.PollEvents()
 		window.SwapBuffers()
