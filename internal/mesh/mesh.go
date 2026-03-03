@@ -3,11 +3,13 @@ package mesh
 import (
 	"bufio"
 	"fmt"
+	"math"
 	"os"
 	"strconv"
 	"strings"
 	"unsafe"
 
+	"github.com/cherevatovm/comp-graphics-mag/internal/shader"
 	"github.com/cherevatovm/comp-graphics-mag/internal/texture"
 	"github.com/go-gl/gl/all-core/gl"
 	"github.com/go-gl/mathgl/mgl32"
@@ -158,7 +160,28 @@ func LoadMeshFromOBJ(path string) (*Mesh, error) {
 	return m, nil
 }
 
-// --------------------------------- For lab 2 ---------------------------------
+// --------------------------------- For lab 1 and 2 ---------------------------------
+
+func GetPentagon() *Mesh {
+	vertices := make([]Vertex, 5)
+	indices := []uint32{
+		0, 1, 2,
+		0, 2, 3,
+		0, 3, 4,
+	}
+
+	alpha := -3 * math.Pi / 10
+	const delta = 2 * math.Pi / 5
+
+	for i := range 5 {
+		vertices[i].Position[0] = float32(math.Cos(alpha))
+		vertices[i].Position[1] = float32(math.Sin(alpha))
+		alpha += delta
+	}
+
+	m, _ := NewMesh(vertices, indices)
+	return m
+}
 
 func GetCubeWithColoredFaces() *Mesh {
 	vertices := []Vertex{
@@ -209,6 +232,16 @@ func GetCubeWithColoredFaces() *Mesh {
 // -----------------------------------------------------------------------------
 
 func (m *Mesh) Draw() {
+	gl.BindVertexArray(m.VAO)
+	gl.DrawElements(gl.TRIANGLES, int32(len(m.indices)), gl.UNSIGNED_INT, nil)
+	gl.BindVertexArray(0)
+}
+
+func (m *Mesh) DrawWithTex(shaderProg shader.ShaderProgram) {
+	shaderProg.Use()
+	m.Tex.Bind(0)
+	shaderProg.SetUniformInt("diffuse_map", 0)
+
 	gl.BindVertexArray(m.VAO)
 	gl.DrawElements(gl.TRIANGLES, int32(len(m.indices)), gl.UNSIGNED_INT, nil)
 	gl.BindVertexArray(0)

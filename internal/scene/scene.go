@@ -1,11 +1,10 @@
 package scene
 
 import (
-	"math"
-
 	"github.com/cherevatovm/comp-graphics-mag/internal/camera"
 	"github.com/cherevatovm/comp-graphics-mag/internal/mesh"
 	"github.com/cherevatovm/comp-graphics-mag/internal/shader"
+	"github.com/cherevatovm/comp-graphics-mag/internal/texture"
 	"github.com/go-gl/gl/all-core/gl"
 	"github.com/go-gl/glfw/v3.3/glfw"
 	"github.com/go-gl/mathgl/mgl32"
@@ -23,22 +22,28 @@ type Scene struct {
 	Meshes  []*mesh.Mesh
 	curMesh *mesh.Mesh
 
+	Textures []*texture.Texture
+
 	Window *glfw.Window
 	Camera *camera.Camera
 
 	LastPosX, LastPosY float64
 	FirstMouse         bool
 
-	mode, activeMeshInd int
-	baseTransforms      []mgl32.Mat4
-	dynTransforms       []mgl32.Mat4
+	mode, activeMeshInd, activeShInd int
+	baseTransforms                   []mgl32.Mat4
+	dynTransforms                    []mgl32.Mat4
+	normalTransforms                 []mgl32.Mat3
 
+	coefVals      [3]float32
 	cubeAngles    []float32
 	pedestalAngle float32
 	globalAngle   float32
 
 	deltaTime, lastFrame float32
 }
+
+// --------------------------------- For lab 1 ---------------------------------
 
 func NewSceneOneShape(window *glfw.Window) (*Scene, error) {
 	sc := &Scene{Window: window, LastPosX: float64(Width) / 2, LastPosY: float64(Height) / 2,
@@ -68,7 +73,7 @@ func NewSceneOneShape(window *glfw.Window) (*Scene, error) {
 	sc.ShaderProgs[1].SetUniformSqMatrFloat("transform.model", sc.baseTransforms[1])
 	gl.UseProgram(0)
 
-	m := getPentagon()
+	m := mesh.GetPentagon()
 	sc.Meshes[0] = m
 	sc.curMesh = m
 
@@ -131,6 +136,8 @@ func (sc *Scene) DrawScenePedestal() {
 	sc.drawCube(3, pedestalTransform, mgl32.Vec3{0.7, 0.7, 0.7})
 }
 
+// --------------------------------- For lab 2 ---------------------------------
+
 func NewSceneSevenShapes(window *glfw.Window) (*Scene, error) {
 	sc := &Scene{Window: window, LastPosX: float64(Width) / 2, LastPosY: float64(Height) / 2, FirstMouse: true,
 		mode: -2, ShaderProgs: make([]shader.ShaderProgram, 6), Meshes: make([]*mesh.Mesh, 3),
@@ -154,7 +161,7 @@ func NewSceneSevenShapes(window *glfw.Window) (*Scene, error) {
 	sc.ShaderProgs[5] = shaderProg
 	sc.curShaderProg = &sc.ShaderProgs[0]
 
-	m := getPentagon()
+	m := mesh.GetPentagon()
 	sc.Meshes[0] = m
 
 	m, err = mesh.LoadMeshFromOBJ("assets/models/cube.obj")
@@ -202,6 +209,87 @@ func (sc *Scene) DrawSceneSevenShapes() {
 			sc.curMesh = sc.Meshes[1]
 		}
 		sc.curMesh.Draw()
+	}
+}
+
+// --------------------------------- For lab 3 ---------------------------------
+
+func NewSceneWithLighting(window *glfw.Window) (*Scene, error) {
+	sc := &Scene{Window: window, LastPosX: float64(Width) / 2, LastPosY: float64(Height) / 2, FirstMouse: true,
+		mode: -3, ShaderProgs: make([]shader.ShaderProgram, 10), Meshes: make([]*mesh.Mesh, 3),
+		Textures: make([]*texture.Texture, 1), baseTransforms: make([]mgl32.Mat4, 3), normalTransforms: make([]mgl32.Mat3, 3)}
+
+	pathsVert := []string{"assets/shaders/lighting/basic_phong.vert", "assets/shaders/lighting/lambert_gouraud.vert",
+		"assets/shaders/lighting/phong_phong.vert", "assets/shaders/lighting/phong_gouraud.vert",
+		"assets/shaders/lighting/phong_phong.vert", "assets/shaders/lighting/blinn_phong_gouraud.vert",
+		"assets/shaders/lighting/basic_phong.vert", "assets/shaders/lighting/toon_gouraud.vert",
+		"assets/shaders/lighting/basic_phong.vert", "assets/shaders/lighting/oren_nayar_gouraud.vert",
+	}
+	pathsFrag := []string{"assets/shaders/lighting/lambert_phong.frag", "assets/shaders/lighting/basic_gouraud.frag",
+		"assets/shaders/lighting/phong_phong.frag", "assets/shaders/lighting/basic_gouraud.frag",
+		"assets/shaders/lighting/blinn_phong_phong.frag", "assets/shaders/lighting/basic_gouraud.frag",
+		"assets/shaders/lighting/toon_phong.frag", "assets/shaders/lighting/basic_gouraud.frag",
+		"assets/shaders/lighting/oren_nayar_phong.frag", "assets/shaders/lighting/basic_gouraud.frag",
+	}
+	sc.coefVals[0], sc.coefVals[1], sc.coefVals[2] = 0.2, 1, 1
+
+	for i := range sc.ShaderProgs {
+		shaderProg, err := shader.NewShaderProgram(pathsVert[i], pathsFrag[i])
+		if err != nil {
+			return nil, err
+		}
+		sc.ShaderProgs[i] = shaderProg
+		sc.curShaderProg = &shaderProg
+		sc.curShaderProg.Use()
+
+		sc.curShaderProg.SetUniformFloat("light.position", -2.0, 0.8, 3.0)
+		sc.curShaderProg.SetUniformFloat("light.ambient", 0.5, 0.5, 0.5)
+		sc.curShaderProg.SetUniformFloat("light.diffuse", 1.0, 1.0, 1.0)
+		sc.curShaderProg.SetUniformFloat("light.constant", 1.0)
+		sc.curShaderProg.SetUniformFloat("light.linear", 0.045)
+		sc.curShaderProg.SetUniformFloat("light.quadratic", 0.0075)
+		sc.curShaderProg.SetUniformFloat("light.ambient_strength", sc.coefVals[0])
+		sc.curShaderProg.SetUniformFloat("linear_coef", sc.coefVals[1])
+		sc.curShaderProg.SetUniformFloat("quadratic_coef", sc.coefVals[2])
+
+		switch i {
+		case 2, 3, 4, 5:
+			shaderProg.SetUniformFloat("light.specular", 1.0, 1.0, 1.0)
+			shaderProg.SetUniformFloat("material.ambient", 0.75, 0.75, 0.75)
+			shaderProg.SetUniformFloat("material.diffuse", 1.0, 1.0, 1.0)
+			shaderProg.SetUniformFloat("material.specular", 0.5, 0.5, 0.5)
+			shaderProg.SetUniformFloat("material.sheen_coef", 32.0)
+		case 8, 9:
+			sc.curShaderProg.SetUniformFloat("roughness", 0.5)
+		}
+		gl.UseProgram(0)
+	}
+	sc.curShaderProg = &sc.ShaderProgs[0]
+
+	sc.Textures[0] = texture.NewWhiteTexture()
+	pathsMesh := []string{"assets/models/snowman.obj", "assets/models/pinetree.obj", "assets/models/heart.obj"}
+	for i := range sc.Meshes {
+		m, err := mesh.LoadMeshFromOBJ(pathsMesh[i])
+		if err != nil {
+			return nil, err
+		}
+		sc.Meshes[i] = m
+		sc.Meshes[i].SetTexture(sc.Textures[0])
+	}
+
+	sc.getLitShapesTransforms()
+	sc.Camera = camera.NewCamera(mgl32.Vec3{0, 0, 3},
+		-90, 0, 45, float32(Width)/Height, 3, 0.1)
+
+	return sc, nil
+}
+
+func (sc *Scene) DrawSceneWithLighting() {
+	sc.UpdateViewProjPos()
+	for i := range sc.Meshes {
+		sc.curShaderProg.SetUniformSqMatrFloat("transform.model", sc.baseTransforms[i])
+		sc.curShaderProg.SetUniformSqMatrFloat("transform.normal_mat", sc.normalTransforms[i])
+		sc.Meshes[i].DrawWithTex(*sc.curShaderProg)
 	}
 }
 
@@ -270,7 +358,7 @@ func (sc *Scene) ProcessInput() {
 			sc.pedestalAngle = 0
 			sc.globalAngle = 0
 		}
-	} else {
+	} else if sc.mode == -2 {
 		// --------------------------------- For lab 2 ---------------------------------
 		if sc.Window.GetKey(glfw.Key1) == glfw.Press {
 			sc.activeMeshInd = 0
@@ -333,13 +421,78 @@ func (sc *Scene) ProcessInput() {
 		if sc.Window.GetKey(glfw.KeyR) == glfw.Press {
 			copy(sc.dynTransforms, sc.baseTransforms)
 		}
+	} else {
+		// --------------------------------- For lab 3 ---------------------------------
+		if sc.Window.GetKey(glfw.Key1) == glfw.Press {
+			sc.activeShInd = 0
+			sc.curShaderProg = &sc.ShaderProgs[0]
+			sc.resetCoefVals()
+		}
+		if sc.Window.GetKey(glfw.Key2) == glfw.Press {
+			sc.activeShInd = 2
+			sc.curShaderProg = &sc.ShaderProgs[2]
+			sc.resetCoefVals()
+		}
+		if sc.Window.GetKey(glfw.Key3) == glfw.Press {
+			sc.activeShInd = 4
+			sc.curShaderProg = &sc.ShaderProgs[4]
+			sc.resetCoefVals()
+		}
+		if sc.Window.GetKey(glfw.Key4) == glfw.Press {
+			sc.activeShInd = 6
+			sc.curShaderProg = &sc.ShaderProgs[6]
+			sc.resetCoefVals()
+		}
+		if sc.Window.GetKey(glfw.Key5) == glfw.Press {
+			sc.activeShInd = 8
+			sc.curShaderProg = &sc.ShaderProgs[8]
+			sc.resetCoefVals()
+		}
+
+		if sc.Window.GetKey(glfw.KeyP) == glfw.Press && sc.activeShInd%2 != 0 {
+			sc.activeShInd--
+			sc.curShaderProg = &sc.ShaderProgs[sc.activeShInd]
+			sc.resetCoefVals()
+		}
+		if sc.Window.GetKey(glfw.KeyG) == glfw.Press && sc.activeShInd%2 == 0 {
+			sc.activeShInd++
+			sc.curShaderProg = &sc.ShaderProgs[sc.activeShInd]
+			sc.resetCoefVals()
+		}
+
+		if sc.Window.GetKey(glfw.KeyMinus) == glfw.Press && sc.coefVals[0] > 0 {
+			sc.coefVals[0] -= 0.1
+			sc.curShaderProg.SetUniformFloat("light.ambient_strength", sc.coefVals[0])
+		}
+		if sc.Window.GetKey(glfw.KeyEqual) == glfw.Press && sc.coefVals[0] < 1 {
+			sc.coefVals[0] += 0.1
+			sc.curShaderProg.SetUniformFloat("light.ambient_strength", sc.coefVals[0])
+		}
+
+		if sc.Window.GetKey(glfw.KeyK) == glfw.Press && sc.coefVals[1] > 0 {
+			sc.coefVals[1] -= 0.1
+			sc.curShaderProg.SetUniformFloat("linear_coef", sc.coefVals[1])
+		}
+		if sc.Window.GetKey(glfw.KeyL) == glfw.Press && sc.coefVals[1] < 2 {
+			sc.coefVals[1] += 0.1
+			sc.curShaderProg.SetUniformFloat("linear_coef", sc.coefVals[1])
+		}
+
+		if sc.Window.GetKey(glfw.KeyN) == glfw.Press && sc.coefVals[2] > 0 {
+			sc.coefVals[2] -= 0.1
+			sc.curShaderProg.SetUniformFloat("quadratic_coef", sc.coefVals[2])
+		}
+		if sc.Window.GetKey(glfw.KeyM) == glfw.Press && sc.coefVals[2] < 2 {
+			sc.coefVals[2] += 0.1
+			sc.curShaderProg.SetUniformFloat("quadratic_coef", sc.coefVals[2])
+		}
 	}
 }
 
 func (sc *Scene) UpdateViewProjPos() {
 	sc.curShaderProg.SetUniformSqMatrFloat("transform.view", sc.Camera.GetViewMatrix())
 	sc.curShaderProg.SetUniformSqMatrFloat("transform.projection", sc.Camera.GetProjectionMatrix())
-	sc.curShaderProg.SetUniformFloat("view_pos", sc.Camera.Position[0],
+	sc.curShaderProg.SetUniformFloat("transform.view_pos", sc.Camera.Position[0],
 		sc.Camera.Position[1], sc.Camera.Position[2])
 }
 
@@ -358,27 +511,6 @@ func (sc *Scene) Release() {
 }
 
 // --------------------------------- For lab 1 ---------------------------------
-
-func getPentagon() *mesh.Mesh {
-	vertices := make([]mesh.Vertex, 5)
-	indices := []uint32{
-		0, 1, 2,
-		0, 2, 3,
-		0, 3, 4,
-	}
-
-	alpha := -3 * math.Pi / 10
-	const delta = 2 * math.Pi / 5
-
-	for i := range 5 {
-		vertices[i].Position[0] = float32(math.Cos(alpha))
-		vertices[i].Position[1] = float32(math.Sin(alpha))
-		alpha += delta
-	}
-
-	m, _ := mesh.NewMesh(vertices, indices)
-	return m
-}
 
 func (sc *Scene) getBaseTransformsForPedestal() {
 	model := mgl32.Translate3D(2, 0, 0)
@@ -448,4 +580,31 @@ func (sc *Scene) processRotation(dx, dy, dz float32) {
 		rotation = mgl32.HomogRotate3DZ(angle * dz)
 	}
 	sc.dynTransforms[sc.activeMeshInd] = sc.dynTransforms[sc.activeMeshInd].Mul4(rotation)
+}
+
+// --------------------------------- For lab 3 ---------------------------------
+
+func (sc *Scene) getLitShapesTransforms() {
+	model := mgl32.Translate3D(-1, -1, 0)
+	model = model.Mul4(mgl32.HomogRotate3DY(mgl32.DegToRad(-90)))
+	model = model.Mul4(mgl32.Scale3D(0.5, 0.5, 0.5))
+	sc.baseTransforms[0] = model
+	sc.normalTransforms[0] = model.Inv().Transpose().Mat3()
+
+	model = mgl32.Translate3D(1, 0, 0)
+	sc.baseTransforms[1] = model
+	sc.normalTransforms[1] = model.Inv().Transpose().Mat3()
+
+	model = mgl32.Translate3D(-3, 0, 0)
+	model = model.Mul4(mgl32.HomogRotate3DY(mgl32.DegToRad(30)))
+	sc.baseTransforms[2] = model
+	sc.normalTransforms[2] = model.Inv().Transpose().Mat3()
+}
+
+func (sc *Scene) resetCoefVals() {
+	sc.coefVals[0], sc.coefVals[1], sc.coefVals[2] = 0.2, 1, 1
+	sc.curShaderProg.Use()
+	sc.curShaderProg.SetUniformFloat("light.ambient_strength", sc.coefVals[0])
+	sc.curShaderProg.SetUniformFloat("linear_coef", sc.coefVals[1])
+	sc.curShaderProg.SetUniformFloat("quadratic_coef", sc.coefVals[2])
 }
