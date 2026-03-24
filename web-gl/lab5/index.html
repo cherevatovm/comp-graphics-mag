@@ -1,0 +1,44 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Lab 4</title>
+  <style>
+    body { margin:0; font-family: sans-serif; background:#222; color:#ddd; }
+    canvas { width: 100vw; height: 80vh; display:block; }
+    .ui { padding: 10px; display:flex; gap:12px; align-items:center; background:#111; color:#ddd; }
+    label { font-size:13px; color:#ccc; margin-right:6px; }
+    .control { display:flex; align-items:center; gap:8px; }
+    input[type=range] { width:160px; }
+    select { background:#222; color:#ddd; border:1px solid #444; padding:4px; }
+    #meshControlsContainer {
+      max-height: 60vh;
+      overflow-y: auto;
+      display:flex;
+      flex-direction:column;
+      gap:8px;
+      margin-left:12px;
+      max-width:420px;
+      padding-right:6px;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="glcanvas"></canvas>
+
+  <div class="ui">
+    <div class="control" style="margin-left:auto">
+    </div>
+
+    <div class="control">
+      <label>Load OBJ</label>
+      <input id="objFile" type="file" accept=".obj" />
+    </div>
+
+    <div id="meshControlsContainer"></div>
+  </div>
+
+  <script src="src/sylvester.js"></script>
+  <script type="module" src="src/main.js"></script>
+</body>
+</html>
