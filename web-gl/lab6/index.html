@@ -1,44 +1,94 @@
 <!doctype html>
-<html>
+<html lang="ru">
 <head>
   <meta charset="utf-8" />
-  <title>Lab 4</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>WebGL Particle Demo</title>
   <style>
-    body { margin:0; font-family: sans-serif; background:#222; color:#ddd; }
-    canvas { width: 100vw; height: 80vh; display:block; }
-    .ui { padding: 10px; display:flex; gap:12px; align-items:center; background:#111; color:#ddd; }
-    label { font-size:13px; color:#ccc; margin-right:6px; }
-    .control { display:flex; align-items:center; gap:8px; }
-    input[type=range] { width:160px; }
-    select { background:#222; color:#ddd; border:1px solid #444; padding:4px; }
-    #meshControlsContainer {
-      max-height: 60vh;
-      overflow-y: auto;
-      display:flex;
-      flex-direction:column;
-      gap:8px;
-      margin-left:12px;
-      max-width:420px;
-      padding-right:6px;
+    html, body {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #05070c;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+    }
+    #glcanvas {
+      display: block;
+      width: 100vw;
+      height: 100vh;
+    }
+    #ui {
+      position: fixed;
+      top: 12px;
+      left: 12px;
+      z-index: 10;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      user-select: none;
+    }
+    #ui button {
+      appearance: none;
+      border: 0;
+      border-radius: 10px;
+      padding: 10px 12px;
+      background: rgba(255,255,255,0.10);
+      color: #f2f6ff;
+      cursor: pointer;
+      backdrop-filter: blur(8px);
+    }
+    #ui button:hover { background: rgba(255,255,255,0.16); }
+    #ui button.active { background: rgba(110,170,255,0.30); }
+    #hud {
+      position: fixed;
+      left: 12px;
+      bottom: 12px;
+      z-index: 10;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      color: #dfe9ff;
+      font-size: 13px;
+      user-select: none;
+      pointer-events: none;
+      text-shadow: 0 1px 8px rgba(0,0,0,0.5);
+    }
+    .badge {
+      display: inline-flex;
+      width: fit-content;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 10px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.08);
+      backdrop-filter: blur(8px);
     }
   </style>
 </head>
 <body>
-  <canvas id="glcanvas"></canvas>
-
-  <div class="ui">
-    <div class="control" style="margin-left:auto">
-    </div>
-
-    <div class="control">
-      <label>Load OBJ</label>
-      <input id="objFile" type="file" accept=".obj" />
-    </div>
-
-    <div id="meshControlsContainer"></div>
+  <div id="ui">
+    <button data-mode="sparkler" class="active">Бенгальский огонь</button>
+    <button data-mode="smoke">Дым</button>
+    <button data-mode="rain">Дождь</button>
+    <button data-mode="snow">Снег</button>
+    <button data-mode="steam">Облако</button>
+    <button data-mode="void_singularity">Вакуум</button>
+    <button data-mode="firework">Фейерверк</button>
+    <button data-mode="smoke_std">Много частиц (point)</button>
+    <button data-mode="smoke_inst">Много частиц (point inst)</button>
+    <button data-mode="smoke_quad_std">Много частиц (quad)</button>
+    <button data-mode="smoke_quad_inst">Много частиц (quad inst)</button>
+    <button id="clearBtn">Очистить</button>
   </div>
 
-  <script src="src/sylvester.js"></script>
-  <script type="module" src="src/main.js"></script>
+  <canvas id="glcanvas"></canvas>
+
+  <div id="hud">
+    <div id="statsLine" class="badge">particles: 0</div>
+  </div>
+
+  <script src="./main.js"></script>
 </body>
 </html>
