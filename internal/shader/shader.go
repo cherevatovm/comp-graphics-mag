@@ -48,6 +48,93 @@ func NewShaderProgram(vertexShaderPath string, fragmentShaderPath string) (Shade
 	return ShaderProgram{progID}, nil
 }
 
+// ----------------------------------- For lab 8 ------------------------------------------
+
+func NewShaderProgramWithTessAndGeom(vertexShaderPath, tessControlPath, tessEvalPath, geomPath, fragmentShaderPath string) (ShaderProgram, error) {
+	vertexSource, err := os.ReadFile(vertexShaderPath)
+	if err != nil {
+		return ShaderProgram{0}, fmt.Errorf("failed to read vertex shader: %w", err)
+	}
+
+	fragmentSource, err := os.ReadFile(fragmentShaderPath)
+	if err != nil {
+		return ShaderProgram{0}, fmt.Errorf("failed to read fragment shader: %w", err)
+	}
+
+	vertexShader, err := compileShader(string(vertexSource), gl.VERTEX_SHADER, "VERTEX")
+	if err != nil {
+		return ShaderProgram{0}, err
+	}
+	defer gl.DeleteShader(vertexShader)
+
+	var tesc uint32
+	if tessControlPath != "" {
+		tescSource, err := os.ReadFile(tessControlPath)
+		if err != nil {
+			return ShaderProgram{0}, fmt.Errorf("failed to read tess control shader: %w", err)
+		}
+		tesc, err = compileShader(string(tescSource), gl.TESS_CONTROL_SHADER, "TESS_CONTROL")
+		if err != nil {
+			return ShaderProgram{0}, err
+		}
+		defer gl.DeleteShader(tesc)
+	}
+
+	var tese uint32
+	if tessEvalPath != "" {
+		teseSource, err := os.ReadFile(tessEvalPath)
+		if err != nil {
+			return ShaderProgram{0}, fmt.Errorf("failed to read tess eval shader: %w", err)
+		}
+		tese, err = compileShader(string(teseSource), gl.TESS_EVALUATION_SHADER, "TESS_EVAL")
+		if err != nil {
+			return ShaderProgram{0}, err
+		}
+		defer gl.DeleteShader(tese)
+	}
+
+	var geom uint32
+	if geomPath != "" {
+		geomSource, err := os.ReadFile(geomPath)
+		if err != nil {
+			return ShaderProgram{0}, fmt.Errorf("failed to read geometry shader: %w", err)
+		}
+		geom, err = compileShader(string(geomSource), gl.GEOMETRY_SHADER, "GEOMETRY")
+		if err != nil {
+			return ShaderProgram{0}, err
+		}
+		defer gl.DeleteShader(geom)
+	}
+
+	fragmentShader, err := compileShader(string(fragmentSource), gl.FRAGMENT_SHADER, "FRAGMENT")
+	if err != nil {
+		return ShaderProgram{0}, err
+	}
+	defer gl.DeleteShader(fragmentShader)
+
+	progID := gl.CreateProgram()
+	gl.AttachShader(progID, vertexShader)
+	if tesc != 0 {
+		gl.AttachShader(progID, tesc)
+	}
+	if tese != 0 {
+		gl.AttachShader(progID, tese)
+	}
+	if geom != 0 {
+		gl.AttachShader(progID, geom)
+	}
+	gl.AttachShader(progID, fragmentShader)
+	gl.LinkProgram(progID)
+	if err := checkCompOrLinkErrors(progID, "PROGRAM"); err != nil {
+		gl.DeleteProgram(progID)
+		return ShaderProgram{0}, err
+	}
+
+	return ShaderProgram{progID}, nil
+}
+
+// -----------------------------------------------------------------------------
+
 func (s ShaderProgram) Use() { gl.UseProgram(s.ID) }
 
 func (s ShaderProgram) Delete() { gl.DeleteProgram(s.ID) }

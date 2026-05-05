@@ -29,6 +29,13 @@ type Mesh struct {
 	VAO, VBO, EBO uint32
 }
 
+type TessMesh struct {
+	vertices []Vertex
+	VAO      uint32
+	VBO      uint32
+	Tex      *texture.Texture
+}
+
 func NewMesh(vertices []Vertex, indices []uint32) (*Mesh, error) {
 	if len(vertices) == 0 {
 		return nil, fmt.Errorf("vertices slice is empty")
@@ -229,7 +236,60 @@ func GetCubeWithColoredFaces() *Mesh {
 	return m
 }
 
+// ----------------------------------- For lab 8 ------------------------------------------
+
+func NewTessPatch(size float32) (*TessMesh, error) {
+	half := size / 2.0
+	vertices := make([]Vertex, 4)
+
+	vertices[0].Position = mgl32.Vec3{-half, -half, 0}
+	vertices[0].TexCoords = mgl32.Vec2{0, 0}
+
+	vertices[1].Position = mgl32.Vec3{half, -half, 0}
+	vertices[1].TexCoords = mgl32.Vec2{1, 0}
+
+	vertices[2].Position = mgl32.Vec3{half, half, 0}
+	vertices[2].TexCoords = mgl32.Vec2{1, 1}
+
+	vertices[3].Position = mgl32.Vec3{-half, half, 0}
+	vertices[3].TexCoords = mgl32.Vec2{0, 1}
+
+	var vao, vbo uint32
+	gl.GenVertexArrays(1, &vao)
+	gl.GenBuffers(1, &vbo)
+
+	gl.BindVertexArray(vao)
+	gl.BindBuffer(gl.ARRAY_BUFFER, vbo)
+	gl.BufferData(gl.ARRAY_BUFFER, len(vertices)*int(unsafe.Sizeof(Vertex{})), gl.Ptr(vertices), gl.STATIC_DRAW)
+
+	gl.EnableVertexAttribArray(0)
+	gl.VertexAttribPointer(0, 3, gl.FLOAT, false, int32(unsafe.Sizeof(Vertex{})), nil)
+	gl.EnableVertexAttribArray(3)
+	gl.VertexAttribPointer(3, 2, gl.FLOAT, false, int32(unsafe.Sizeof(Vertex{})), unsafe.Pointer(unsafe.Offsetof(Vertex{}.TexCoords)))
+	gl.BindVertexArray(0)
+
+	return &TessMesh{vertices: vertices, VAO: vao, VBO: vbo}, nil
+}
+
+func (t *TessMesh) DrawTess() {
+	gl.BindVertexArray(t.VAO)
+	gl.PatchParameteri(gl.PATCH_VERTICES, 4)
+	gl.DrawArrays(gl.PATCHES, 0, 4)
+	gl.BindVertexArray(0)
+}
+
 // -----------------------------------------------------------------------------
+
+func (t *TessMesh) SetTexture(tex *texture.Texture) { t.Tex = tex }
+
+func (t *TessMesh) DeleteBuffers() {
+	if t.VAO != 0 {
+		gl.DeleteVertexArrays(1, &t.VAO)
+	}
+	if t.VBO != 0 {
+		gl.DeleteBuffers(1, &t.VBO)
+	}
+}
 
 func (m *Mesh) Draw() {
 	gl.BindVertexArray(m.VAO)

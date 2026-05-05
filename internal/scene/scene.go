@@ -34,6 +34,10 @@ type Scene struct {
 	baseTransforms                   []mgl32.Mat4
 	dynTransforms                    []mgl32.Mat4
 	normalTransforms                 []mgl32.Mat3
+	TessPatch                        *mesh.TessMesh
+	NormalsShader                    *shader.ShaderProgram
+	ShowNormals                      bool
+	ShowPatch                        bool
 
 	coefVals      [3]float32
 	cubeAngles    []float32
@@ -421,7 +425,7 @@ func (sc *Scene) ProcessInput() {
 		if sc.Window.GetKey(glfw.KeyR) == glfw.Press {
 			copy(sc.dynTransforms, sc.baseTransforms)
 		}
-	} else {
+	} else if sc.mode == -3 {
 		// --------------------------------- For lab 3 ---------------------------------
 		if sc.Window.GetKey(glfw.Key1) == glfw.Press {
 			sc.activeShInd = 0
@@ -505,8 +509,89 @@ func (sc *Scene) Release() {
 	for _, m := range sc.Meshes {
 		m.DeleteBuffers()
 	}
+	if sc.TessPatch != nil {
+		sc.TessPatch.DeleteBuffers()
+	}
+	if sc.NormalsShader != nil {
+		sc.NormalsShader.Delete()
+	}
 	for _, sh := range sc.ShaderProgs {
 		sh.Delete()
+	}
+}
+
+// --------------------------------- Tessellation landscape (for lab 8) ---------------------------------
+
+func NewSceneTessLandscape(window *glfw.Window) (*Scene, error) {
+	sc := &Scene{Window: window, LastPosX: float64(Width) / 2, LastPosY: float64(Height) / 2, FirstMouse: true,
+		mode: -4, ShaderProgs: make([]shader.ShaderProgram, 1)}
+
+	sc.ShowPatch = true
+
+	sh, err := shader.NewShaderProgramWithTessAndGeom("assets/shaders/tess.vert", "assets/shaders/tess.tesc",
+		"assets/shaders/tess.tese", "", "assets/shaders/tess.frag")
+	if err != nil {
+		return nil, err
+	}
+	sc.ShaderProgs[0] = sh
+	sc.curShaderProg = &sc.ShaderProgs[0]
+
+	normProg, err := shader.NewShaderProgramWithTessAndGeom("assets/shaders/tess.vert", "assets/shaders/tess.tesc",
+		"assets/shaders/tess.tese", "assets/shaders/normals_visual.geom", "assets/shaders/normals_visual.frag")
+	if err == nil {
+		sc.NormalsShader = &normProg
+		sc.NormalsShader.Use()
+		sc.NormalsShader.SetUniformFloat("LineColor", 0.0, 0.0, 0.0)
+		gl.UseProgram(0)
+	}
+
+	patch, err := mesh.NewTessPatch(10.0)
+	if err != nil {
+		return nil, err
+	}
+	sc.TessPatch = patch
+
+	hm := texture.NewNoiseTexture256()
+	sc.Textures = make([]*texture.Texture, 1)
+	sc.Textures[0] = hm
+	sc.TessPatch.SetTexture(hm)
+
+	sc.Camera = camera.NewCamera(mgl32.Vec3{0, 2, 8}, -90, -20, 45, float32(Width)/Height, 1.25, 0.1)
+	return sc, nil
+}
+
+func (sc *Scene) DrawSceneTessLandscape() {
+	// First pass: draw filled patch with base shader (only if patch drawing enabled)
+	if !sc.ShowNormals || sc.ShowPatch {
+		sc.curShaderProg.Use()
+		sc.curShaderProg.SetUniformSqMatrFloat("transform.view", sc.Camera.GetViewMatrix())
+		sc.curShaderProg.SetUniformSqMatrFloat("transform.projection", sc.Camera.GetProjectionMatrix())
+		sc.Textures[0].Bind(0)
+		sc.curShaderProg.SetUniformInt("heightmap", 0)
+		sc.curShaderProg.SetUniformFloat("height_scale", 1.5)
+		sc.curShaderProg.SetUniformFloat("camera_pos", sc.Camera.Position[0], sc.Camera.Position[1], sc.Camera.Position[2])
+		sc.curShaderProg.SetUniformFloat("max_tess_level", 32.0)
+		if sc.ShowNormals {
+			gl.Enable(gl.POLYGON_OFFSET_FILL)
+			gl.PolygonOffset(1.0, 1.0)
+		}
+		sc.TessPatch.DrawTess()
+		if sc.ShowNormals {
+			gl.Disable(gl.POLYGON_OFFSET_FILL)
+		}
+	}
+
+	// Second pass: draw normals overlay as lines using geometry shader program (draw even if patch disabled)
+	if sc.ShowNormals && sc.NormalsShader != nil {
+		sc.NormalsShader.Use()
+		sc.NormalsShader.SetUniformSqMatrFloat("transform.view", sc.Camera.GetViewMatrix())
+		sc.NormalsShader.SetUniformSqMatrFloat("transform.projection", sc.Camera.GetProjectionMatrix())
+		sc.Textures[0].Bind(0)
+		sc.NormalsShader.SetUniformInt("heightmap", 0)
+		sc.NormalsShader.SetUniformFloat("height_scale", 1.5)
+		sc.NormalsShader.SetUniformFloat("camera_pos", sc.Camera.Position[0], sc.Camera.Position[1], sc.Camera.Position[2])
+		sc.NormalsShader.SetUniformFloat("max_tess_level", 32.0)
+		sc.TessPatch.DrawTess()
 	}
 }
 
